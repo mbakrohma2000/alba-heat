@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alba Heat — an open-world crime story in Puerto Alba</title>
+<style>
+  :root {
+    --gold: #ffd166;
+    --teal: #2ec4b6;
+    --ink: #160f24;
+    --panel: rgba(18, 10, 32, 0.62);
+    --panel-edge: rgba(255, 209, 102, 0.55);
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b0f2a; }
+  body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: #fff7ea; }
+  #app { position: fixed; inset: 0; }
+  #app canvas { display: block; }
+  /* Read aloud, never shown: the status line screen readers announce. */
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #hud.hidden, .hidden { display: none !important; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+    backdrop-filter: blur(3px);
+  }
+  #statsPanel { position: absolute; top: 14px; left: 14px; padding: 10px 14px 12px; min-width: 168px; }
+  #cashRow { font-size: 24px; font-weight: 800; letter-spacing: 0.5px; color: var(--gold); text-shadow: 0 2px 6px rgba(0,0,0,0.6); }
+  #cashRow .lbl { font-size: 11px; color: #ffe9bd; letter-spacing: 2px; display: block; font-weight: 600; }
+  #healthWrap { margin-top: 7px; height: 10px; border-radius: 5px; background: rgba(255,255,255,0.18); overflow: hidden; }
+  #healthFill { height: 100%; width: 100%; border-radius: 5px; background: linear-gradient(90deg, #ff5d73, #ffb35c); transition: width 0.25s ease; }
+  #healthLbl { font-size: 10px; letter-spacing: 2px; color: #ffd9c2; margin-top: 4px; font-weight: 600; }
+  #wantedPanel { position: absolute; top: 14px; right: 14px; padding: 8px 14px 10px; text-align: right; }
+  #wantedLbl { font-size: 10px; letter-spacing: 3px; color: #ffb3c1; font-weight: 700; }
+  #stars { font-size: 26px; line-height: 1.05; letter-spacing: 3px; }
+  #stars .on { color: #ff4757; text-shadow: 0 0 9px rgba(255, 71, 87, 0.9); }
+  #stars .off { color: rgba(255,255,255,0.22); }
+  #objectiveBar {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    max-width: 520px; padding: 9px 18px; text-align: center;
+  }
+  #objectiveBar .lbl { font-size: 10px; letter-spacing: 3px; color: var(--teal); font-weight: 700; display: block; }
+  #objectiveText { font-size: 15px; font-weight: 600; color: #fff3d6; }
+  #minimapWrap {
+    position: absolute; right: 14px; bottom: 14px; width: 188px; height: 188px;
+    border-radius: 50%; overflow: hidden; border: 2px solid var(--panel-edge);
+    box-shadow: 0 6px 22px rgba(0,0,0,0.5); background: #20303c;
+  }
+  #minimap { width: 188px; height: 188px; display: block; }
+  #speedo {
+    position: absolute; left: 14px; bottom: 14px; padding: 8px 14px; text-align: left;
+  }
+  #speedo .num { font-size: 26px; font-weight: 800; color: #fff; }
+  #speedo .unit { font-size: 11px; color: #ffd9c2; letter-spacing: 1px; }
+  #speedo .car { font-size: 11px; color: var(--teal); letter-spacing: 1px; font-weight: 700; display: block; }
+  #prompt {
+    position: absolute; left: 50%; bottom: 108px; transform: translateX(-50%);
+    padding: 8px 18px; font-size: 15px; font-weight: 700; color: #fff;
+  }
+  #prompt b { color: var(--gold); border: 1px solid var(--panel-edge); border-radius: 5px; padding: 0 7px; margin-right: 6px; background: rgba(0,0,0,0.35); }
+  #banner {
+    position: absolute; left: 50%; top: 24%; transform: translateX(-50%) scale(0.96);
+    text-align: center; opacity: 0; transition: opacity 0.35s ease, transform 0.35s ease; max-width: 640px;
+  }
+  #banner.show { opacity: 1; transform: translateX(-50%) scale(1); }
+  #banner .big { font-size: 34px; font-weight: 900; letter-spacing: 2px; color: var(--gold); text-shadow: 0 3px 14px rgba(0,0,0,0.75); }
+  #banner .sub { font-size: 16px; color: #ffeeda; text-shadow: 0 2px 8px rgba(0,0,0,0.8); margin-top: 4px; }
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 52%, rgba(214, 18, 44, 0.55) 100%);
+  }
+  #hintLine { position: absolute; left: 14px; bottom: 76px; font-size: 11px; color: rgba(255,240,214,0.75); text-shadow: 0 1px 4px rgba(0,0,0,0.8); letter-spacing: 0.4px; }
+  #ammoPanel {
+    position: absolute; right: 14px; bottom: 216px; padding: 7px 14px 8px; text-align: right;
+    font-size: 17px; font-weight: 800; letter-spacing: 1.5px; color: #ffe9bd;
+  }
+  #ammoPanel .lbl { font-size: 9px; letter-spacing: 3px; color: var(--teal); display: block; font-weight: 700; }
+  #ammoPanel.low { color: #ff8fa0; }
+  #timerChip {
+    position: absolute; top: 74px; left: 50%; transform: translateX(-50%);
+    padding: 6px 20px 7px; font-size: 22px; font-weight: 900; letter-spacing: 2px; color: var(--gold);
+  }
+  #timerChip.late { color: #ff5d73; }
+  #storyCard .card { max-width: 560px; }
+  #storyCard .big { font-size: 44px; font-weight: 900; letter-spacing: 3px; color: var(--gold); text-shadow: 0 4px 18px rgba(0,0,0,0.8); margin-top: 4px; }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(24, 8, 44, 0.42) 0%, rgba(64, 18, 54, 0.30) 45%, rgba(16, 6, 26, 0.62) 100%);
+  }
+  .card { text-align: center; max-width: 620px; padding: 30px 38px; }
+  .kicker { font-size: 12px; letter-spacing: 5px; color: var(--teal); font-weight: 700; }
+  h1.title {
+    margin: 6px 0 2px; font-size: 74px; line-height: 0.95; font-weight: 900; letter-spacing: 1px;
+    font-family: "Arial Black", "Segoe UI", Arial, sans-serif;
+    background: linear-gradient(180deg, #ffe9a8 12%, #ffb35c 48%, #ff5d73 90%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 0 rgba(64, 10, 44, 0.85)) drop-shadow(0 10px 26px rgba(0,0,0,0.55));
+  }
+  .tagline { font-size: 17px; color: #ffe9c9; font-style: italic; text-shadow: 0 2px 8px rgba(0,0,0,0.85); }
+  .story { font-size: 14.5px; line-height: 1.55; color: #fdf3df; text-shadow: 0 1px 6px rgba(0,0,0,0.9); margin: 16px auto 4px; max-width: 520px; }
+  .controls {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px; text-align: left;
+    margin: 18px auto 6px; max-width: 470px; font-size: 13px; color: #ffeeda;
+    background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 12px 18px;
+  }
+  .controls b { color: var(--gold); font-weight: 800; }
+  .btnRow { margin-top: 20px; display: flex; gap: 14px; justify-content: center; }
+  button.cta {
+    pointer-events: auto; cursor: pointer; border: 0; border-radius: 999px; padding: 13px 34px;
+    font-size: 17px; font-weight: 900; letter-spacing: 1.5px; color: #2a0e22;
+    background: linear-gradient(180deg, #ffe9a8, #ffb35c); box-shadow: 0 6px 20px rgba(255, 150, 60, 0.45), inset 0 1px 0 #fff8;
+  }
+  button.cta:hover { filter: brightness(1.07); }
+  button.cta.ghost { background: rgba(20, 10, 34, 0.65); color: var(--gold); border: 1px solid var(--panel-edge); box-shadow: none; }
+  .fineprint { margin-top: 16px; font-size: 11.5px; color: rgba(255, 238, 210, 0.8); text-shadow: 0 1px 4px rgba(0,0,0,0.9); }
+  #bustedScreen .big, #pauseScreen .big { font-size: 52px; font-weight: 900; letter-spacing: 3px; color: #ff5d73; text-shadow: 0 4px 18px rgba(0,0,0,0.8); }
+  #pauseScreen .big { color: var(--gold); }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="app" aria-label="Alba Heat: an open-world crime game set in the coastal city of Puerto Alba"></div>
+
+<div id="hud" class="hidden">
+  <div id="statsPanel" class="panel">
+    <div id="cashRow"><span class="lbl">CASH</span>$<span id="cashVal">250</span></div>
+    <div id="healthWrap"><div id="healthFill"></div></div>
+    <div id="healthLbl">MARINA SOLANO</div>
+  </div>
+  <div id="wantedPanel" class="panel">
+    <div id="wantedLbl">WANTED</div>
+    <div id="stars"><span class="off">★</span><span class="off">★</span><span class="off">★</span><span class="off">★</span><span class="off">★</span></div>
+  </div>
+  <div id="objectiveBar" class="panel">
+    <span class="lbl">OBJECTIVE</span>
+    <span id="objectiveText">Free roam — enjoy Puerto Alba.</span>
+  </div>
+  <div id="speedo" class="panel hidden">
+    <span class="car" id="speedoCar">CABRILLO</span>
+    <span class="num" id="speedoNum">0</span> <span class="unit">KM/H</span>
+  </div>
+  <div id="ammoPanel" class="panel"><span class="lbl">SIDEARM</span><span id="ammoText">PISTOL 12 / 60</span></div>
+  <div id="timerChip" class="panel hidden">2:05</div>
+  <div id="hintLine">WASD drive / walk &nbsp;•&nbsp; F enter car &nbsp;•&nbsp; J punch &nbsp;•&nbsp; K pistol &nbsp;•&nbsp; R reload &nbsp;•&nbsp; SHIFT run &nbsp;•&nbsp; SPACE handbrake &nbsp;•&nbsp; P pause &nbsp;•&nbsp; M sound</div>
+  <div id="prompt" class="panel hidden"><b>F</b><span id="promptText">Enter car</span></div>
+  <div id="banner"><div class="big" id="bannerBig"></div><div class="sub" id="bannerSub"></div></div>
+  <div id="minimapWrap"><canvas id="minimap" width="188" height="188"></canvas></div>
+</div>
+<div id="vignette"></div>
+
+<div id="startScreen" class="overlay">
+  <div class="card">
+    <div class="kicker">PUERTO ALBA • COSTA DEL AMANECER</div>
+    <h1 class="title">ALBA HEAT</h1>
+    <div class="tagline">One courier. One suitcase. Every cop in the city.</div>
+    <p class="story">Marina Solano drives a cab on the dawn coast and owes money to the wrong people.
+      Tonight her old friend Tito offers a way out: pick up a suitcase at the marina, deliver it to the
+      Hotel Alba, ask no questions. The pay is $750 — enough to clear her debt. The catch? Somebody
+      already called the police.</p>
+    <div class="controls">
+      <div><b>W A S D</b> — walk / drive</div>
+      <div><b>SHIFT</b> — run</div>
+      <div><b>F</b> — enter / exit any car</div>
+      <div><b>SPACE</b> — handbrake</div>
+      <div><b>J</b> — punch &nbsp; <b>K</b> — pistol</div>
+      <div><b>R</b> — reload &nbsp; <b>MOUSE</b> — drag to look</div>
+      <div><b>P</b> — pause &nbsp; <b>M</b> — sound on/off</div>
+    </div>
+    <div class="btnRow">
+      <button class="cta" id="btnStart">START — MISSION 1</button>
+      <button class="cta ghost hidden" id="btnContinue">CONTINUE</button>
+    </div>
+    <div class="fineprint">An original open-world crime game. Steal cars, dodge the Alba PD, and never open the suitcase.</div>
+  </div>
+</div>
+
+<div id="pauseScreen" class="overlay hidden">
+  <div class="card">
+    <div class="big">PAUSED</div>
+    <p class="story">The city waits. Your progress is saved automatically.</p>
+    <div class="btnRow"><button class="cta" id="btnResume">BACK TO THE STREETS</button></div>
+  </div>
+</div>
+
+<div id="bustedScreen" class="overlay hidden">
+  <div class="card">
+    <div class="big" id="bustedTitle">BUSTED</div>
+    <p class="story" id="bustedText">The Alba PD took Marina in. The station charges a $200 processing fee — and Tito's suitcase is gone.</p>
+    <div class="btnRow"><button class="cta" id="btnRespawn">WALK OUT OF THE STATION</button></div>
+  </div>
+</div>
+
+<div id="storyCard" class="overlay hidden">
+  <div class="card">
+    <div class="kicker" id="storyKicker">CHAPTER TWO</div>
+    <div class="big" id="storyTitle">COLD OPEN</div>
+    <p class="story" id="storyBody"></p>
+    <div class="btnRow"><button class="cta" id="btnStoryGo">ROLL OUT</button></div>
+  </div>
+</div>
+
+<p id="status" role="status" aria-live="polite"></p>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
